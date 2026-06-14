@@ -2,45 +2,53 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-<title>飞机大战 升级版</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>一笔画</title>
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050613;font-family:Arial,"Microsoft YaHei",sans-serif;touch-action:none;user-select:none}canvas{display:block;width:100vw;height:100vh;background:#050613}.tip{position:fixed;left:0;right:0;bottom:18px;text-align:center;color:rgba(255,255,255,.65);font-size:14px;pointer-events:none}.mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;color:white}.panel{width:min(86vw,420px);background:rgba(20,24,45,.95);border:1px solid rgba(255,255,255,.2);border-radius:18px;padding:22px;text-align:center;box-shadow:0 20px 70px rgba(0,0,0,.45)}button{border:0;border-radius:12px;padding:12px 22px;font-size:18px;background:#2f8cff;color:white}.small{font-size:14px;color:#b9c1d9;line-height:1.8}</style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10131c;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,"Microsoft YaHei",sans-serif}.wrap{height:100%;display:flex;flex-direction:column}.top{height:76px;padding:12px 16px;background:#171b28;display:flex;align-items:center;justify-content:space-between;gap:8px}.title{font-size:22px;font-weight:700}.info{font-size:14px;color:#aeb8d0}.btns{display:flex;gap:8px}.btn{border:0;border-radius:12px;padding:10px 12px;background:#2d3652;color:#fff;font-size:14px}.btn:active{transform:scale(.96)}#game{flex:1;width:100%;touch-action:none;background:radial-gradient(circle at 50% 15%,#182039,#080a12 72%)}.bottom{height:86px;background:#171b28;padding:10px 16px;color:#cbd5f0;font-size:14px;line-height:1.45}.msg{color:#72e6a8;font-weight:700}.fail{color:#ff7c7c}.cover{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:22px}.panel{width:min(360px,92vw);background:#1b2133;border:1px solid #37415f;border-radius:20px;padding:22px;text-align:center}.panel h2{margin:0 0 10px}.panel p{color:#cbd5f0}.big{font-size:18px;padding:12px 18px;background:#4d7cff}
+</style>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div class="tip" id="tip">手指拖动飞机，自动开火</div>
-<div class="mask" id="startMask"><div class="panel"><h1>飞机大战 升级版</h1><p class="small">手机触摸操作 / 自动射击 / 敌机 / Boss / 升级奖励<br>保存为 index.html，上传到 GitHub Pages 就能链接即玩。</p><button id="startBtn">开始游戏</button></div></div>
+<div class="wrap">
+  <div class="top">
+    <div><div class="title">一笔画</div><div class="info" id="info">第 1 关</div></div>
+    <div class="btns"><button class="btn" onclick="undo()">撤销</button><button class="btn" onclick="resetLevel()">重来</button><button class="btn" onclick="nextLevel()">跳关</button></div>
+  </div>
+  <canvas id="game"></canvas>
+  <div class="bottom"><div id="tip">规则：从任意点开始，拖动连接所有线段。每条线只能走一次。</div><div id="status"></div></div>
+</div>
+<div class="cover" id="cover"><div class="panel"><h2 id="coverTitle">通关</h2><p id="coverText">进入下一关</p><button class="btn big" onclick="hideCover();nextLevel()">下一关</button></div></div>
 <script>
-const canvas=document.getElementById('game');const ctx=canvas.getContext('2d');let W,H,DPR;
-function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}resize();addEventListener('resize',resize);
-let running=false,over=false,score=0,level=1,exp=0,nextExp=80,lives=3,t=0,last=0,spawnTimer=0,bossTimer=0,fireTimer=0,power=1,spread=0,stars=[];
-const player={x:W/2,y:H-115,r:24,speed:0};let bullets=[],enemies=[],particles=[],boss=null,pickups=[];
-for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.8+.4,v:Math.random()*45+20});
-function rand(a,b){return a+Math.random()*(b-a)}function hit(a,b){let dx=a.x-b.x,dy=a.y-b.y;return Math.hypot(dx,dy)<a.r+b.r}
-function shoot(){let angles=[0];if(spread>=1)angles=[-.16,0,.16];if(spread>=2)angles=[-.28,-.1,.1,.28];for(const a of angles)bullets.push({x:player.x,y:player.y-28,vx:Math.sin(a)*420,vy:-720, r:4, dmg:power});}
-function spawnEnemy(){let r=rand(16,28);enemies.push({x:rand(r,W-r),y:-40,r,hp:Math.ceil(level*1.1),vy:rand(80,160)+level*8,color:`hsl(${rand(330,20)},90%,60%)`});}
-function spawnBoss(){boss={x:W/2,y:90,r:52,hp:80+level*25,max:80+level*25,vx:130,fire:0};}
-function boom(x,y,n=14){for(let i=0;i<n;i++)particles.push({x,y,vx:rand(-160,160),vy:rand(-160,160),life:rand(.25,.7),r:rand(2,5)});}
-function addExp(v){score+=v;exp+=v;if(exp>=nextExp){exp-=nextExp;level++;nextExp=Math.floor(nextExp*1.35);chooseUpgrade();}}
-function chooseUpgrade(){running=false;const m=document.getElementById('startMask');m.style.display='flex';m.innerHTML=`<div class="panel"><h2>升级到 Lv.${level}</h2><p class="small">选择一个强化</p><button onclick="upgrade('power')">子弹伤害 +1</button><br><br><button onclick="upgrade('spread')">弹道数量提升</button><br><br><button onclick="upgrade('life')">生命 +1</button></div>`;}
-window.upgrade=function(type){if(type==='power')power++;if(type==='spread')spread=Math.min(spread+1,2);if(type==='life')lives++;document.getElementById('startMask').style.display='none';running=true;last=performance.now();requestAnimationFrame(loop)}
-function drawPlayer(){let g=ctx.createLinearGradient(player.x,player.y-36,player.x,player.y+30);g.addColorStop(0,'#5efcff');g.addColorStop(1,'#0067ff');ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(player.x,player.y-38);ctx.lineTo(player.x-28,player.y+30);ctx.lineTo(player.x,player.y+16);ctx.lineTo(player.x+28,player.y+30);ctx.closePath();ctx.fill();ctx.fillStyle='#ffd230';ctx.beginPath();ctx.moveTo(player.x-10,player.y+30);ctx.lineTo(player.x+10,player.y+30);ctx.lineTo(player.x,player.y+50);ctx.closePath();ctx.fill();}
-function drawUI(){ctx.fillStyle='white';ctx.font='24px Arial';ctx.fillText('分数：'+score,22,38);ctx.font='18px Arial';ctx.fillStyle='#9ec5ff';ctx.fillText('等级：'+level,22,68);ctx.fillStyle='#ff9dbd';ctx.font='24px Arial';ctx.fillText('生命：'+lives,W-116,38);ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(22,82,150,8);ctx.fillStyle='#57e389';ctx.fillRect(22,82,150*(exp/nextExp),8);if(boss){ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(W*.18,112,W*.64,10);ctx.fillStyle='#ff3366';ctx.fillRect(W*.18,112,W*.64*(boss.hp/boss.max),10);}}
-function update(dt){t+=dt;spawnTimer+=dt;bossTimer+=dt;fireTimer+=dt;if(fireTimer>.16){shoot();fireTimer=0}if(spawnTimer>Math.max(.25,.75-level*.03)){spawnEnemy();spawnTimer=0}if(!boss&&bossTimer>30){spawnBoss();bossTimer=0}
-for(const s of stars){s.y+=s.v*dt;if(s.y>H){s.y=0;s.x=Math.random()*W}}
-for(const b of bullets){b.x+=b.vx*dt;b.y+=b.vy*dt}bullets=bullets.filter(b=>b.y>-30&&b.x>-30&&b.x<W+30);
-for(const e of enemies){e.y+=e.vy*dt}for(const e of enemies){if(hit(player,e)){e.hp=0;lives--;boom(e.x,e.y,18)}}
-enemies=enemies.filter(e=>{if(e.y>H+50){lives--;return false}return e.hp>0});
-for(const b of bullets){for(const e of enemies){if(hit(b,e)){e.hp-=b.dmg;b.y=-99;if(e.hp<=0){addExp(10);boom(e.x,e.y)}}}if(boss&&hit(b,boss)){boss.hp-=b.dmg;b.y=-99;if(boss.hp<=0){addExp(150);boom(boss.x,boss.y,60);boss=null}}}
-if(boss){boss.x+=boss.vx*dt;if(boss.x<boss.r||boss.x>W-boss.r)boss.vx*=-1;boss.fire+=dt;if(boss.fire>.65){boss.fire=0;for(let i=0;i<6;i++){let a=i*Math.PI*2/6+t;enemies.push({x:boss.x+Math.cos(a)*boss.r,y:boss.y+Math.sin(a)*boss.r,r:10,hp:1,vy:190+level*8,color:'#ff44aa'})}}if(hit(player,boss)){lives--;boss.hp-=10;boom(player.x,player.y,20)}}
-for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt}particles=particles.filter(p=>p.life>0);if(lives<=0)gameOver();}
-function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#050613';ctx.fillRect(0,0,W,H);ctx.fillStyle='white';for(const s of stars){ctx.globalAlpha=Math.min(1,s.r/2);ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fill()}ctx.globalAlpha=1;for(const b of bullets){ctx.fillStyle='#ffd21e';ctx.fillRect(b.x-3,b.y-12,6,18)}for(const e of enemies){ctx.fillStyle=e.color;ctx.fillRect(e.x-e.r,e.y-e.r,e.r*2,e.r*2)}if(boss){ctx.fillStyle='#d9268b';ctx.fillRect(boss.x-boss.r,boss.y-boss.r,boss.r*2,boss.r*2)}for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle='#ffdf55';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill()}ctx.globalAlpha=1;drawPlayer();drawUI();}
-function loop(now){if(!running)return;let dt=Math.min((now-last)/1000,.033);last=now;update(dt);draw();requestAnimationFrame(loop)}
-function gameOver(){running=false;over=true;const m=document.getElementById('startMask');m.style.display='flex';m.innerHTML=`<div class="panel"><h1>游戏结束</h1><p class="small">分数：${score}<br>等级：${level}</p><button onclick="location.reload()">重新开始</button></div>`;}
-function moveTo(x,y){player.x=Math.max(32,Math.min(W-32,x));player.y=Math.max(80,Math.min(H-70,y));}
-canvas.addEventListener('touchmove',e=>{e.preventDefault();const p=e.touches[0];moveTo(p.clientX,p.clientY)},{passive:false});canvas.addEventListener('mousemove',e=>{if(e.buttons)moveTo(e.clientX,e.clientY)});
-document.getElementById('startBtn').onclick=()=>{document.getElementById('startMask').style.display='none';running=true;last=performance.now();requestAnimationFrame(loop)};
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const info=document.getElementById('info'),statusEl=document.getElementById('status');
+let W,H,dpr=1,levelIndex=0,nodes=[],edges=[],used=[],path=[],current=null,drag=null;
+const levels=[
+ {name:'三角形',p:[[.5,.22],[.22,.72],[.78,.72]],e:[[0,1],[1,2],[2,0]]},
+ {name:'房子',p:[[.25,.65],[.75,.65],[.75,.35],[.5,.15],[.25,.35]],e:[[0,1],[1,2],[2,3],[3,4],[4,0],[4,2]]},
+ {name:'信封',p:[[.2,.25],[.8,.25],[.8,.75],[.2,.75]],e:[[0,1],[1,2],[2,3],[3,0],[0,2],[1,3]]},
+ {name:'五角星',p:[[.5,.12],[.62,.42],[.92,.42],[.68,.6],[.78,.9],[.5,.72],[.22,.9],[.32,.6],[.08,.42],[.38,.42]],e:[[0,3],[3,6],[6,9],[9,2],[2,5],[5,8],[8,1],[1,4],[4,7],[7,0]]},
+ {name:'桥形图',p:[[.18,.72],[.38,.72],[.62,.72],[.82,.72],[.3,.35],[.5,.2],[.7,.35]],e:[[0,1],[1,2],[2,3],[0,4],[4,5],[5,6],[6,3],[1,4],[2,6],[4,6]]},
+ {name:'六边网',p:[[.5,.12],[.82,.3],[.82,.68],[.5,.86],[.18,.68],[.18,.3],[.5,.5]],e:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6]]}
+];
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight-162;canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);loadLevel(levelIndex)}
+addEventListener('resize',resize);
+function loadLevel(i){let L=levels[i%levels.length];nodes=L.p.map(([x,y])=>({x:x*W,y:y*H}));edges=L.e.map(([a,b])=>({a,b}));used=edges.map(_=>false);path=[];current=null;drag=null;info.textContent=`第 ${i+1} 关：${L.name}`;statusEl.textContent='';draw()}
+function dist(a,b,c,d){return Math.hypot(a-c,b-d)}
+function nearest(x,y){let best=-1,bd=999;nodes.forEach((n,i)=>{let d=dist(x,y,n.x,n.y);if(d<bd){bd=d;best=i}});return bd<32?best:-1}
+function edgeBetween(a,b){for(let i=0;i<edges.length;i++){let e=edges[i];if(!used[i]&&((e.a===a&&e.b===b)||(e.a===b&&e.b===a)))return i}return -1}
+function point(e){let t=e.touches?e.touches[0]:e;let r=canvas.getBoundingClientRect();return{x:t.clientX-r.left,y:t.clientY-r.top}}
+function start(e){e.preventDefault();let p=point(e),n=nearest(p.x,p.y);if(n>=0){if(current===null){current=n;path=[n]}drag=p;draw()}}
+function move(e){e.preventDefault();if(current===null)return;drag=point(e);let n=nearest(drag.x,drag.y);if(n>=0&&n!==current){let ei=edgeBetween(current,n);if(ei>=0){used[ei]=true;current=n;path.push(n);drag=null;statusEl.textContent='';if(used.every(Boolean))win();draw();return} else if(!path.includes(n)){statusEl.innerHTML='<span class="fail">这两个点不能这样连，或者线已经走过。</span>'}}
+draw()}
+function end(){drag=null;draw()}
+canvas.addEventListener('mousedown',start);canvas.addEventListener('mousemove',move);canvas.addEventListener('mouseup',end);canvas.addEventListener('touchstart',start,{passive:false});canvas.addEventListener('touchmove',move,{passive:false});canvas.addEventListener('touchend',end);
+function undo(){if(path.length<2)return;let b=path.pop(),a=path[path.length-1];for(let i=edges.length-1;i>=0;i--){let e=edges[i];if(used[i]&&((e.a===a&&e.b===b)||(e.a===b&&e.b===a))){used[i]=false;break}}current=path[path.length-1]??null;draw()}
+function resetLevel(){loadLevel(levelIndex)}
+function nextLevel(){levelIndex++;loadLevel(levelIndex)}
+function win(){document.getElementById('coverTitle').textContent='通关成功';document.getElementById('coverText').textContent=`你完成了第 ${levelIndex+1} 关。`;document.getElementById('cover').style.display='flex'}
+function hideCover(){document.getElementById('cover').style.display='none'}
+function draw(){ctx.clearRect(0,0,W,H);for(let i=0;i<80;i++){let x=(i*97%W),y=(i*193%H),r=(i%3+1)*.7;ctx.fillStyle='rgba(255,255,255,.45)';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}edges.forEach((e,i)=>{let a=nodes[e.a],b=nodes[e.b];ctx.lineWidth=used[i]?10:6;ctx.lineCap='round';ctx.strokeStyle=used[i]?'#65e69e':'#46506e';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});if(current!==null&&drag){let a=nodes[current];ctx.lineWidth=5;ctx.strokeStyle='rgba(255,220,80,.85)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(drag.x,drag.y);ctx.stroke()}nodes.forEach((n,i)=>{ctx.beginPath();ctx.arc(n.x,n.y,i===current?17:14,0,Math.PI*2);ctx.fillStyle=i===current?'#ffd64a':'#edf3ff';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#3e7cff';ctx.stroke()});ctx.fillStyle='#cbd5f0';ctx.font='16px Arial';ctx.fillText(`已完成 ${used.filter(Boolean).length}/${edges.length}`,16,28)}
+resize();
 </script>
 </body>
 </html>
